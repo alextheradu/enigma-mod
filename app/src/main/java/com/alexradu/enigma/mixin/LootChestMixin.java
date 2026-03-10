@@ -3,6 +3,7 @@ package com.alexradu.enigma.mixin;
 import com.alexradu.enigma.EnigmaMod;
 import net.minecraft.block.entity.LootableContainerBlockEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.Identifier;
@@ -41,10 +42,19 @@ public abstract class LootChestMixin {
             if (entry.table().equalsIgnoreCase(tableKey)) {
                 if (ENIGMA_RANDOM.nextDouble() * 100.0 < entry.chance()) {
                     var hints = mod.getEnigmaConfig().getHints();
-                    if (!hints.isEmpty()) {
+                    if (hints.isEmpty()) return;
+
+                    if (player instanceof ServerPlayerEntity serverPlayer) {
+                        var candidates = mod.getPlayerDataManager()
+                                .getUnreceivedIndices(serverPlayer.getUuid(), hints.size());
+                        if (candidates.isEmpty()) return;
+                        int index = candidates.get(ENIGMA_RANDOM.nextInt(candidates.size()));
+                        enigmaPendingClue = mod.getClueItemFactory()
+                                .createGameplayClueItem(hints.get(index), index);
+                    } else {
                         int index = ENIGMA_RANDOM.nextInt(hints.size());
                         enigmaPendingClue = mod.getClueItemFactory()
-                                .createClueItem(hints.get(index), index);
+                                .createGameplayClueItem(hints.get(index), index);
                     }
                 }
                 break;

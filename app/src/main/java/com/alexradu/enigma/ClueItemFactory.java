@@ -18,6 +18,7 @@ public class ClueItemFactory {
     public static final String KEY_TARGET_Z     = "target_z";
     public static final String KEY_HINT_MESSAGE = "hint_message";
     public static final String KEY_HINT_INDEX   = "hint_index";
+    public static final String KEY_ADMIN_GIVEN  = "admin_given";
 
     private final EnigmaMod mod;
 
@@ -25,7 +26,15 @@ public class ClueItemFactory {
         this.mod = mod;
     }
 
-    public ItemStack createClueItem(EnigmaConfig.HintEntry hint, int hintIndex) {
+    public ItemStack createGameplayClueItem(EnigmaConfig.HintEntry hint, int hintIndex) {
+        return createClueItem(hint, hintIndex, false);
+    }
+
+    public ItemStack createAdminClueItem(EnigmaConfig.HintEntry hint, int hintIndex) {
+        return createClueItem(hint, hintIndex, true);
+    }
+
+    public ItemStack createClueItem(EnigmaConfig.HintEntry hint, int hintIndex, boolean adminGiven) {
         var cfg = mod.getEnigmaConfig();
 
         Item item = Registries.ITEM.getOrEmpty(Identifier.tryParse(cfg.getClueItemMaterial()))
@@ -56,6 +65,7 @@ public class ClueItemFactory {
         nbt.putInt(KEY_TARGET_Z, hint.z());
         nbt.putString(KEY_HINT_MESSAGE, hint.message());
         nbt.putInt(KEY_HINT_INDEX, hintIndex);
+        nbt.putBoolean(KEY_ADMIN_GIVEN, adminGiven);
 
         return stack;
     }
@@ -64,5 +74,22 @@ public class ClueItemFactory {
         if (stack == null || stack.isEmpty()) return false;
         NbtCompound nbt = stack.getNbt();
         return nbt != null && nbt.contains(KEY_IS_CLUE);
+    }
+
+    public boolean isGameplayClue(ItemStack stack) {
+        return isClueItem(stack) && !isAdminGiven(stack);
+    }
+
+    public boolean isAdminGiven(ItemStack stack) {
+        NbtCompound nbt = stack != null ? stack.getNbt() : null;
+        return nbt != null && nbt.getBoolean(KEY_ADMIN_GIVEN);
+    }
+
+    public int getHintIndex(ItemStack stack) {
+        NbtCompound nbt = stack != null ? stack.getNbt() : null;
+        if (nbt == null || !nbt.contains(KEY_HINT_INDEX)) {
+            return -1;
+        }
+        return nbt.getInt(KEY_HINT_INDEX);
     }
 }

@@ -61,6 +61,10 @@ public class PlayerDataManager {
         save();
     }
 
+    public boolean hasReceived(UUID uuid, int hintIndex) {
+        return receivedHints.getOrDefault(uuid, Set.of()).contains(hintIndex);
+    }
+
     public List<Integer> getUnreceivedIndices(UUID uuid, int totalHints) {
         Set<Integer> received = receivedHints.getOrDefault(uuid, Set.of());
         List<Integer> unreceived = new ArrayList<>();

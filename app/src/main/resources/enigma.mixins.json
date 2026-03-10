@@ -4,8 +4,10 @@
   "package": "com.alexradu.enigma.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "ClueItemPickupMixin",
     "LootChestMixin",
-    "SignUpdateMixin"
+    "SignUpdateMixin",
+    "SlotTakeMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -37,12 +37,7 @@ public class DropHandler {
                         if (candidates.isEmpty()) return;
 
                         int index = candidates.get(RANDOM.nextInt(candidates.size()));
-                        // In 1.20.1, dropStack takes only the ItemStack (no world param)
-                        killed.dropStack(mod.getClueItemFactory().createClueItem(hints.get(index), index));
-
-                        if (player != null) {
-                            mod.getPlayerDataManager().markReceived(player.getUuid(), index);
-                        }
+                        killed.dropStack(mod.getClueItemFactory().createGameplayClueItem(hints.get(index), index));
                     }
                     break;
                 }
