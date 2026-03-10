@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "enigma",
+  "version": "${version}",
+  "name": "Enigma",
+  "description": "Scavenger hunt mod for Fabric servers.",
+  "authors": ["alexradu"],
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.alexradu.enigma.EnigmaMod"]
+  },
+  "mixins": ["enigma.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.14",
+    "fabric-api": "*",
+    "minecraft": "~1.20.1"
+  }
+}

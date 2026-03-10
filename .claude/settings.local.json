@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew :app:build)",
+      "Bash(where java:*)",
+      "Bash(java -version)",
+      "Bash(dir 'C:\\\\Program Files\\\\Eclipse Adoptium')",
+      "Bash(dir 'C:\\\\Program Files\\\\Java')",
+      "Bash(dir 'C:\\\\Program Files\\\\Microsoft')",
+      "Bash(setx JAVA_HOME \"C:\\\\Program Files\\\\Eclipse Adoptium\\\\jdk-21.0.10.7-hotspot\")",
+      "Bash(setx PATH \"%PATH%;C:\\\\Program Files\\\\Eclipse Adoptium\\\\jdk-21.0.10.7-hotspot\\\\bin\")",
+      "Bash(./gradlew :app:dependencies --configuration compileClasspath)",
+      "Bash(jar tf:*)",
+      "Bash(find ~/.gradle/caches -name *.jar -path *yarn*1.21.4*)",
+      "Bash(jar xf:*)",
+      "Bash(javap -p \"net/minecraft/block/entity/LootableContainerBlockEntity.class\")",
+      "Bash(rm -rf net/)",
+      "Bash(./gradlew :app:compileJava)",
+      "Bash(javap -c net/minecraft/inventory/LootableInventory.class)"
+    ]
+  }
+}

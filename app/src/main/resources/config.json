@@ -1,0 +1,27 @@
+{
+  "hunt-active": false,
+  "secret-string": "opensesame",
+  "reward-command": "say %player% has solved the Enigma!",
+  "sign-action": "HIDE_TEXT",
+  "clue-item": {
+    "material": "minecraft:paper",
+    "name": "Mysterious Clue",
+    "lore": [
+      "A strange note with scrawled coordinates...",
+      "Location: %x%, %y%, %z%",
+      "Right-click the exact block to reveal your hint."
+    ]
+  },
+  "loot-chests": [
+    { "table": "minecraft:chests/end_city_treasure", "chance": 25.0 },
+    { "table": "minecraft:chests/stronghold_library", "chance": 15.0 }
+  ],
+  "mob-drops": [
+    { "type": "minecraft:evoker", "chance": 50.0 },
+    { "type": "minecraft:elder_guardian", "chance": 30.0 }
+  ],
+  "hints": [
+    { "x": 100, "y": 64, "z": 200, "message": "You found it! Seek the ancient ruins to the north." },
+    { "x": -50, "y": 70, "z": 300, "message": "Excellent! The stone monolith holds your next clue." }
+  ]
+}
