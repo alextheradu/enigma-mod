@@ -44,6 +44,11 @@ public class SignUpdateMixin {
             if (line != null) sb.append(line);
         }
         if (sb.toString().trim().equalsIgnoreCase(mod.getEnigmaConfig().getSecretString())) {
+            int totalHints = mod.getEnigmaConfig().getHints().size();
+            if (!mod.getPlayerDataManager().hasRedeemedAll(player.getUuid(), totalHints)) {
+                player.sendMessage(Text.literal("You must redeem every clue in order before the final sign works."), false);
+                return;
+            }
             enigmaSignPos  = packet.getPos();
             enigmaSignFront = packet.isFront();
         }

@@ -3,29 +3,31 @@ package com.alexradu.enigma.commands;
 import com.alexradu.enigma.ClueItemFactory;
 import com.alexradu.enigma.EnigmaMod;
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import net.minecraft.block.ChestBlock;
+import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.ChestBlockEntity;
+import net.minecraft.command.argument.BlockPosArgumentType;
 import net.minecraft.inventory.Inventory;
+import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
+import net.minecraft.loot.context.LootContextParameterSet;
+import net.minecraft.loot.context.LootContextParameters;
+import net.minecraft.loot.context.LootContextTypes;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.chunk.WorldChunk;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
 
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class EnigmaCommand {
-
-    private static final int DEFAULT_CHEST_RADIUS = 64;
-    private static final int MAX_CHEST_RADIUS = 128;
 
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher, EnigmaMod mod) {
         dispatcher.register(
@@ -50,13 +52,14 @@ public class EnigmaCommand {
                                         })
                                         .executes(ctx -> giveHints(ctx.getSource(), mod,
                                                 StringArgumentType.getString(ctx, "player")))))
-                        .then(CommandManager.literal("chests")
-                                .executes(ctx -> listNearbyChests(ctx.getSource(), mod, DEFAULT_CHEST_RADIUS))
-                                .then(CommandManager.argument("radius", IntegerArgumentType.integer(1))
-                                        .executes(ctx -> listNearbyChests(
+                        .then(CommandManager.literal("resetAll")
+                                .executes(ctx -> resetAll(ctx.getSource(), mod)))
+                        .then(CommandManager.literal("setChest")
+                                .then(CommandManager.argument("pos", BlockPosArgumentType.blockPos())
+                                        .executes(ctx -> setChest(
                                                 ctx.getSource(),
                                                 mod,
-                                                IntegerArgumentType.getInteger(ctx, "radius")))))
+                                                BlockPosArgumentType.getLoadedBlockPos(ctx, "pos")))))
         );
     }
 
@@ -84,6 +87,73 @@ public class EnigmaCommand {
         return 1;
     }
 
+    private static int resetAll(ServerCommandSource src, EnigmaMod mod) {
+        mod.getPlayerDataManager().resetAll();
+
+        int removedClues = 0;
+        for (ServerPlayerEntity player : src.getServer().getPlayerManager().getPlayerList()) {
+            removedClues += removeClues(player.getInventory(), mod.getClueItemFactory());
+            removedClues += removeClues(player.getEnderChestInventory(), mod.getClueItemFactory());
+            player.playerScreenHandler.sendContentUpdates();
+        }
+
+        int finalRemovedClues = removedClues;
+        src.sendFeedback(() -> Text.literal("Reset all player Enigma progress and removed "
+                + finalRemovedClues + " clue item(s) from online players.")
+                .formatted(Formatting.GREEN), true);
+        return 1;
+    }
+
+    private static int setChest(ServerCommandSource src, EnigmaMod mod, BlockPos pos) {
+        var lootEntries = mod.getEnigmaConfig().getLootChests();
+        var hints = mod.getEnigmaConfig().getHints();
+        if (lootEntries.isEmpty()) {
+            src.sendError(Text.literal("No loot-chests are configured."));
+            return 0;
+        }
+        if (hints.isEmpty()) {
+            src.sendError(Text.literal("No hints are configured."));
+            return 0;
+        }
+
+        var world = src.getWorld();
+        Direction chestFacing = getChestFacing(src, pos);
+        world.setBlockState(pos, Blocks.CHEST.getDefaultState().with(ChestBlock.FACING, chestFacing), 3);
+
+        if (!(world.getBlockEntity(pos) instanceof ChestBlockEntity chest)) {
+            src.sendError(Text.literal("Failed to create a chest at the target position."));
+            return 0;
+        }
+
+        chest.clear();
+
+        var chosenLoot = lootEntries.get(ThreadLocalRandom.current().nextInt(lootEntries.size()));
+        Identifier lootTableId = Identifier.tryParse(chosenLoot.table());
+        if (lootTableId == null) {
+            src.sendError(Text.literal("Configured loot table is invalid: " + chosenLoot.table()));
+            return 0;
+        }
+
+        var lootTable = src.getServer().getLootManager().getLootTable(lootTableId);
+        var lootContext = new LootContextParameterSet.Builder(world)
+                .add(LootContextParameters.ORIGIN, Vec3d.ofCenter(pos))
+                .build(LootContextTypes.CHEST);
+        lootTable.supplyInventory(chest, lootContext, ThreadLocalRandom.current().nextLong());
+
+        int hintIndex = chooseDemoHintIndex(src, mod, hints.size());
+        addStackToInventory(chest, mod.getClueItemFactory().createGameplayClueItem(hints.get(hintIndex), hintIndex));
+
+        chest.markDirty();
+        world.updateListeners(pos, world.getBlockState(pos), world.getBlockState(pos), 3);
+
+        int finalHintIndex = hintIndex;
+        src.sendFeedback(() -> Text.literal("Created demo chest at "
+                + pos.getX() + ", " + pos.getY() + ", " + pos.getZ()
+                + " using loot table " + lootTableId
+                + " with guaranteed clue #" + finalHintIndex + ".").formatted(Formatting.GREEN), false);
+        return 1;
+    }
+
     private static int giveHints(ServerCommandSource src, EnigmaMod mod, String playerName) {
         ServerPlayerEntity target = src.getServer().getPlayerManager().getPlayer(playerName);
         if (target == null) {
@@ -103,97 +173,59 @@ public class EnigmaCommand {
 
         int count = hints.size();
         src.sendFeedback(() -> Text.literal("Gave " + count + " clue(s) to "
-                + target.getGameProfile().getName() + ".").formatted(Formatting.GREEN), false);
+                + target.getGameProfile().getName()
+                + ". They must redeem them in order.").formatted(Formatting.GREEN), false);
         return 1;
     }
 
-    private static int listNearbyChests(ServerCommandSource src, EnigmaMod mod, int radius) {
+    private static int chooseDemoHintIndex(ServerCommandSource src, EnigmaMod mod, int totalHints) {
+        if (src.getEntity() instanceof ServerPlayerEntity player) {
+            var unseen = mod.getPlayerDataManager().getUnreceivedIndices(player.getUuid(), totalHints);
+            if (!unseen.isEmpty()) {
+                return unseen.get(ThreadLocalRandom.current().nextInt(unseen.size()));
+            }
+        }
+        return ThreadLocalRandom.current().nextInt(totalHints);
+    }
+
+    private static void addStackToInventory(Inventory inventory, ItemStack stack) {
+        for (int slot = 0; slot < inventory.size(); slot++) {
+            if (inventory.getStack(slot).isEmpty()) {
+                inventory.setStack(slot, stack);
+                return;
+            }
+        }
+        inventory.setStack(inventory.size() - 1, stack);
+    }
+
+    private static int removeClues(Inventory inventory, ClueItemFactory clueItemFactory) {
+        int removed = 0;
+        for (int slot = 0; slot < inventory.size(); slot++) {
+            ItemStack stack = inventory.getStack(slot);
+            if (!clueItemFactory.isClueItem(stack)) {
+                continue;
+            }
+            removed += stack.getCount();
+            inventory.setStack(slot, ItemStack.EMPTY);
+        }
+        if (inventory instanceof PlayerInventory playerInventory) {
+            playerInventory.markDirty();
+        }
+        return removed;
+    }
+
+    private static Direction getChestFacing(ServerCommandSource src, BlockPos chestPos) {
         if (!(src.getEntity() instanceof ServerPlayerEntity player)) {
-            src.sendError(Text.literal("This command can only be used by a player."));
-            return 0;
+            return Direction.NORTH;
         }
 
-        int clampedRadius = Math.min(Math.max(radius, 1), MAX_CHEST_RADIUS);
-        BlockPos origin = player.getBlockPos();
-        var world = player.getServerWorld();
-        int chunkRadius = (clampedRadius + 15) / 16;
-        List<ChestScanResult> results = new ArrayList<>();
+        double dx = player.getX() - (chestPos.getX() + 0.5);
+        double dz = player.getZ() - (chestPos.getZ() + 0.5);
 
-        for (int chunkX = (origin.getX() >> 4) - chunkRadius; chunkX <= (origin.getX() >> 4) + chunkRadius; chunkX++) {
-            for (int chunkZ = (origin.getZ() >> 4) - chunkRadius; chunkZ <= (origin.getZ() >> 4) + chunkRadius; chunkZ++) {
-                WorldChunk chunk = world.getChunkManager().getWorldChunk(chunkX, chunkZ);
-                if (chunk == null) continue;
-
-                for (BlockPos pos : chunk.getBlockEntityPositions()) {
-                    if (distanceSquared(origin, pos) > (long) clampedRadius * clampedRadius) continue;
-
-                    var blockEntity = world.getBlockEntity(pos);
-                    if (!(blockEntity instanceof ChestBlockEntity chest)) continue;
-
-                    ChestScanResult result = scanChest(chest, pos, mod.getClueItemFactory(), origin);
-                    if (result != null) {
-                        results.add(result);
-                    }
-                }
-            }
+        if (Math.abs(dx) > Math.abs(dz)) {
+            return dx >= 0.0 ? Direction.EAST : Direction.WEST;
         }
-
-        results.sort(Comparator.comparingLong(ChestScanResult::distanceSquared)
-                .thenComparing(result -> result.pos().getY())
-                .thenComparing(result -> result.pos().getX())
-                .thenComparing(result -> result.pos().getZ()));
-
-        if (results.isEmpty()) {
-            src.sendFeedback(() -> Text.literal("No nearby chests with Enigma clue papers found.")
-                    .formatted(Formatting.YELLOW), false);
-            return 1;
-        }
-
-        int finalRadius = clampedRadius;
-        src.sendFeedback(() -> Text.literal("Nearby Enigma clue chests (" + results.size()
-                + ") within " + finalRadius + " blocks:")
-                .formatted(Formatting.GOLD), false);
-
-        for (ChestScanResult result : results) {
-            src.sendFeedback(() -> Text.literal(String.format(
-                    "%d, %d, %d - %d clue paper(s), hints %s",
-                    result.pos().getX(),
-                    result.pos().getY(),
-                    result.pos().getZ(),
-                    result.paperCount(),
-                    result.hintIndices()))
-                    .formatted(Formatting.YELLOW), false);
-        }
-        return results.size();
-    }
-
-    private static ChestScanResult scanChest(Inventory chest, BlockPos pos, ClueItemFactory clueItemFactory, BlockPos origin) {
-        int paperCount = 0;
-        Set<Integer> hintIndices = new TreeSet<>();
-
-        for (int slot = 0; slot < chest.size(); slot++) {
-            ItemStack stack = chest.getStack(slot);
-            if (!clueItemFactory.isClueItem(stack)) continue;
-
-            paperCount += stack.getCount();
-            int hintIndex = clueItemFactory.getHintIndex(stack);
-            if (hintIndex >= 0) {
-                hintIndices.add(hintIndex);
-            }
-        }
-
-        if (paperCount == 0) {
-            return null;
-        }
-
-        return new ChestScanResult(pos.toImmutable(), paperCount, hintIndices, distanceSquared(origin, pos));
-    }
-
-    private static long distanceSquared(BlockPos a, BlockPos b) {
-        long dx = (long) a.getX() - b.getX();
-        long dy = (long) a.getY() - b.getY();
-        long dz = (long) a.getZ() - b.getZ();
-        return dx * dx + dy * dy + dz * dz;
+        return dz >= 0.0 ? Direction.SOUTH : Direction.NORTH;
     }
 
     private static int sendHelp(ServerCommandSource src) {
@@ -202,12 +234,10 @@ public class EnigmaCommand {
                 " /enigma start - Start the hunt\n" +
                 " /enigma stop - Stop the hunt\n" +
                 " /enigma reload - Reload config\n" +
-                " /enigma give <player> - Give the full clue set\n" +
-                " /enigma chests [radius] - List nearby clue chests"
+                " /enigma give <player> - Give the full clue set (redeem in order)\n" +
+                " /enigma resetAll - Reset all player clue data\n" +
+                " /enigma setChest <x y z> - Create a demo clue chest"
         ).formatted(Formatting.GOLD), false);
         return 1;
-    }
-
-    private record ChestScanResult(BlockPos pos, int paperCount, Set<Integer> hintIndices, long distanceSquared) {
     }
 }

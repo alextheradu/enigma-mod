@@ -5,6 +5,10 @@ plugins {
 version = "1.0.0"
 group = "com.alexradu"
 
+base {
+    archivesName.set("enigma-fabric")
+}
+
 repositories {
     mavenCentral()
 }
@@ -28,7 +32,6 @@ java {
 }
 
 tasks.jar {
-    archiveBaseName = "enigma"
     archiveVersion = version.toString()
     from("LICENSE") {
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE

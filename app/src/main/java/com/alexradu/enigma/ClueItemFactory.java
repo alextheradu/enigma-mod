@@ -8,6 +8,7 @@ import net.minecraft.nbt.NbtList;
 import net.minecraft.nbt.NbtString;
 import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 
 public class ClueItemFactory {
@@ -19,6 +20,14 @@ public class ClueItemFactory {
     public static final String KEY_HINT_MESSAGE = "hint_message";
     public static final String KEY_HINT_INDEX   = "hint_index";
     public static final String KEY_ADMIN_GIVEN  = "admin_given";
+    private static final Formatting[] CLUE_COLORS = {
+            Formatting.GOLD,
+            Formatting.AQUA,
+            Formatting.LIGHT_PURPLE,
+            Formatting.GREEN,
+            Formatting.YELLOW,
+            Formatting.BLUE
+    };
 
     private final EnigmaMod mod;
 
@@ -42,7 +51,15 @@ public class ClueItemFactory {
         ItemStack stack = new ItemStack(item);
 
         // Display name
-        stack.setCustomName(Text.literal(cfg.getClueItemName()));
+        Formatting color = CLUE_COLORS[Math.floorMod(hintIndex, CLUE_COLORS.length)];
+        stack.setCustomName(
+                Text.literal("◆ ")
+                        .formatted(Formatting.DARK_GRAY, Formatting.BOLD)
+                        .append(Text.literal("Clue " + (hintIndex + 1))
+                                .formatted(color, Formatting.BOLD))
+                        .append(Text.literal(" ◆")
+                                .formatted(Formatting.DARK_GRAY, Formatting.BOLD))
+        );
 
         // Lore — stored as JSON Text strings in display.Lore NBT
         NbtList loreList = new NbtList();
