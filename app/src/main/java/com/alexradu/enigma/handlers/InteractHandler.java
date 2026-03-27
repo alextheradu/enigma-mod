@@ -34,7 +34,7 @@ public class InteractHandler {
             }
 
             if (world.isClient()) {
-                return ActionResult.CONSUME;
+                return ActionResult.PASS;
             }
             if (!(player instanceof ServerPlayerEntity serverPlayer)) {
                 return ActionResult.PASS;
